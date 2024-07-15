@@ -183,49 +183,62 @@ class Translate : Plugin() {
     override fun stop(context: Context?) = patcher.unpatchAll()
 
     private fun translateMessage(text: String, from: String? = null, to: String? = null): TranslateData {
-        val toLang = to ?: settings.getString("defaultLanguage", "en")
-        val fromLang = from ?: "auto"
-        val queryBuilder = Http.QueryBuilder("https://translate.googleapis.com/translate_a/single").run {
-            append("client", "gtx")
-            append("sl", fromLang)
-            append("tl", toLang)
-            append("dt", "t")
-            append("q", text)
-        }
-        val translatedJsonReq = Http.Request(queryBuilder.toString(), "GET").apply {
-            setHeader("Content-Type", "application/json")
-            setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4592.0 Safari/537.36")
-        }.execute()
+    // Preprocess text to handle links and emojis
+    val cleanedText = cleanTextForTranslation(text)
 
-        if (!translatedJsonReq.ok()) {
-            return when (translatedJsonReq.statusCode) {
-                429 -> TranslateErrorData(
-                    errorCode = 429,
-                    errorText = "Translate API ratelimit reached. Please try again later."
-                )
-                else -> TranslateErrorData(
-                    errorCode = translatedJsonReq.statusCode,
-                    errorText = "An unknown error occurred. Please report this to the developer of Translate."
-                )
-            }
-        }
-        val parsedJson = JSONArray(translatedJsonReq.text())
-
-        val translatedSections = parsedJson.getJSONArray(0)
-
-        val translatedText = buildString {
-            for (i in 0 until translatedSections.length()) {
-                append(translatedSections.getJSONArray(i).getString(0))
-            }
-        }
-
-        return TranslateSuccessData(
-                sourceLanguage = parsedJson.getString(2),
-                translatedLanguage = toLang,
-                sourceText = text,
-                translatedText = translatedText
-        )
+    val toLang = to ?: settings.getString("defaultLanguage", "en")
+    val fromLang = from ?: "auto"
+    val queryBuilder = Http.QueryBuilder("https://translate.googleapis.com/translate_a/single").run {
+        append("client", "gtx")
+        append("sl", fromLang)
+        append("tl", toLang)
+        append("dt", "t")
+        append("q", cleanedText)
     }
+    val translatedJsonReq = Http.Request(queryBuilder.toString(), "GET").apply {
+        setHeader("Content-Type", "application/json")
+        setHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4592.0 Safari/537.36")
+    }.execute()
+
+    if (!translatedJsonReq.ok()) {
+        return when (translatedJsonReq.statusCode) {
+            429 -> TranslateErrorData(
+                errorCode = 429,
+                errorText = "Translate API ratelimit reached. Please try again later."
+            )
+            else -> TranslateErrorData(
+                errorCode = translatedJsonReq.statusCode,
+                errorText = "An unknown error occurred. Please report this to the developer of Translate."
+            )
+        }
+    }
+    val parsedJson = JSONArray(translatedJsonReq.text())
+
+    val translatedSections = parsedJson.getJSONArray(0)
+
+    val translatedText = buildString {
+        for (i in 0 until translatedSections.length()) {
+            append(translatedSections.getJSONArray(i).getString(0))
+        }
+    }
+
+    return TranslateSuccessData(
+            sourceLanguage = parsedJson.getString(2),
+            translatedLanguage = toLang,
+            sourceText = text,
+            translatedText = translatedText
+    )
+}
+
+private fun cleanTextForTranslation(text: String): String {
+    // Remove links from text
+    val textWithoutLinks = text.replace(Regex("http[s]?://\\S+"), "")
+
+    // Remove emojis from text
+    val textWithoutEmojis = textWithoutLinks.replace(Regex("[\\p{So}\\p{Sk}\\p{Sm}\\p{Sc}]+"), "")
+
+    return textWithoutEmojis.trim()
+}
 
 //    private fun Message.guildId(): Long? {
 //        val channel = ChannelWrapper(StoreStream.getChannels().getChannel(this.channelId))
