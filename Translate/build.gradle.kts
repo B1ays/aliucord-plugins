@@ -1,6 +1,8 @@
-version = "1.3.1"
+version = "1.4.0"
 description = "Adds an option to translate messages."
 aliucord.changelog.set("""
+    # Version 1.4.0
+    * Global module rewrite. Fix some bugs, new settings menu.
     # Version 1.3.1
     * Fix translating multiple lines of text (finally)
     # Version 1.3.0
